@@ -5,6 +5,7 @@
 > 程序使用豆包编写
 
 本项目使用[GNU General Public License v3.0](LICENSE) 许可证。
+[哔哩哔哩介绍视频](https://www.bilibili.com/video/BV1oo8dz2Evt)
 
 ## 介绍
 
