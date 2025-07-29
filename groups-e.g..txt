@@ -1,0 +1,12 @@
+;注释
+:组名1,order,all
+句子1
+句子2
+:组名2,random,team
+句子A
+句子B
+句子C
+;order=顺序发送
+;random=随机发送
+;all=全部聊天
+;team=队伍聊天
