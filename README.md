@@ -19,7 +19,7 @@
    - 但是CS2控制台实现随机数太困难，所以随机发送时只是打乱了发送句子的顺序，发送完所有语句会从头开始循环发送
    - 仅支持直接编辑groups.txt，不支持程序内编辑
    - 请勿用于非法用途，包括打广告、骚扰队友等
-   - 感谢`cneicy/ImLag`项目提供的思路
+   - 感谢`cneicy/ImLag`项目提供的思路，[视频](https://www.bilibili.com/video/BV1gNTgzLEKV)
 
 ## 安装与使用
 
