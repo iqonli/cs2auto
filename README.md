@@ -20,7 +20,9 @@
    - 但是CS2控制台实现随机数太困难，所以随机发送时只是打乱了发送句子的顺序，发送完所有语句会从头开始循环发送
    - 仅支持直接编辑groups.txt，不支持程序内编辑
    - 请勿用于非法用途，包括打广告、骚扰队友等
-   - 感谢`cneicy/ImLag`项目提供的思路，[视频](https://www.bilibili.com/video/BV1gNTgzLEKV)
+   - 在CS2控制台输入`exec autoexec.cfg`刷新后才能使用
+   - 如果不想每次都输入，可以在Steam>库>CS2右键>属性>高级用户可以选择输入对启动选项的修改的框里面输入`+exec autoexec.cfg`
+   - 感谢`cneicy/ImLag`项目提供的思路以及部分句子，[视频](https://www.bilibili.com/video/BV1gNTgzLEKV)
 
 ## 安装与使用
 
@@ -30,6 +32,7 @@
 
 ```txt
 ;注释
+;组名必须全英文！下划线也行。如果不按规定操作，出问题别找我。
 :组名1,order,all
 句子1
 句子2
