@@ -4,6 +4,8 @@
 >
 > 程序使用豆包编写
 
+本项目使用[GNU General Public License v3.0](LICENSE) 许可证。
+
 ## 介绍
 
 1. **程序思路**：
