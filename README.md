@@ -2,7 +2,7 @@
 
 > 在CS2中，按下绑定的键，即可发送对应组内的句子
 >
-> 程序使用豆包编写
+> 程序使用豆包编写，感谢豆包，感谢豆包，感谢豆包
 
 本项目使用[GNU General Public License v3.0](LICENSE) 许可证。
 [哔哩哔哩介绍视频](https://www.bilibili.com/video/BV1oo8dz2Evt)
@@ -11,7 +11,7 @@
 
 1. **程序思路**：
    
-   通过在`\Counter-Strike Global Offensive\game\csgo\cfg`这个目录生成一堆句子的cfg以及一个选择器cfg，再进行按键绑定，即可一键发送句子
+   通过在`\Counter-Strike Global Offensive\game\csgo\cfg`这个目录生成一堆句子的cfg以及一个选择器cfg，再进行游戏内按键绑定，即可一键发送句子
 
 2. **工作方式**：
    
@@ -26,23 +26,38 @@
 
 ## 安装与使用
 
-无需管理员，运行cs2auto.exe即可。
+1. 下载[release](https://github.com/iqonli/cs2auto/releases/tag/Publish)版的zip文件
+1. 按照`groups-e.g..txt`的格式，使用文本编辑器编辑`groups.txt`，添加或删除组、属性、句子
+1. 运行`cs2auto.exe`，为各组绑定键位
+1. 输入1并回车来应用键位
+1. 进入CS2，打开控制台输入`exec autoexec.cfg`来刷新键位
+1. 如果不知道是否开启控制台，前往设置>游戏设置>设置的第一项进行设置
+1. 绑定完成键位，即可关闭`cs2auto.exe`
+1. 但是每次进入CS2并不会自动加载功能
+1. 如果想每次启动CS2时自动加载功能,需要在Steam>库>CS2右键>属性>高级用户可以选择输入对启动选项的修改的框里面输入`+exec autoexec.cfg`
+1. 如果要修改键位，需要从第3步一直做到第5步
+1. 如果修改了`groups.txt`，必须重新运行`cs2auto.exe`，从第2步一直做到第5步
+
 
 ## groups-e.g..txt - 示例格式
 
 ```txt
 ;注释
-;组名必须全英文！下划线也行。如果不按规定操作，出问题别找我。
-:组名1,order,all
+;组名只允许包含大小写字母,数字和下划线!如果不按规定操作,出问题别找我。
+:group1,order,all
 句子1
 句子2
-:组名2,random,team
+:group2,random,team
 句子A
 句子B
 句子C
+
+;使用英文逗号间隔,不区分大小写
+;第一个属性
 ;order=顺序发送
 ;random=随机发送
-;all=全部聊天
+;第二个属性
 ;team=队伍聊天
+;all=全部聊天
 ```
-有事没事请加QQ群：743278470
+有事没事请加QQ群：743278470，你可以添加句子，报告错误，寻求帮助，官匹开黑

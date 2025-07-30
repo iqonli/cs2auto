@@ -8,6 +8,7 @@
 #include <cctype>
 #include <algorithm>
 #include <random>
+#include <cstdlib>
 #define i_input _color(14);printf(">");_color();
 
 bool showtips = true;
@@ -75,9 +76,67 @@ vector<Group> ReadGroups(const string& filename)
 				current = Group();
 			}
 			vector<string> parts = Split(line.substr(1), ',');
-			current.name = parts[0];
-			if (parts.size() > 1) current.isRandom = (parts[1] == "random");
-			if (parts.size() > 2) current.isTeam = (parts[2] == "team");
+			
+			// 校验部分数量
+			if (parts.size() < 3)
+			{
+				_color(78);
+				cerr << "错误:组定义必须包含三个部分 - 组名,order/random,team/all\n请手动修改groups.txt" << endl;
+				_color();
+				system("pause");
+				exit(1);
+			}
+			
+			// 校验组名
+			string name = parts[0];
+			if (name.empty())
+			{
+				_color(78);
+				cerr << "错误:组名不能为空\n请手动修改groups.txt" << endl;
+				_color();
+				system("pause");
+				exit(1);
+			}
+			for (char c : name)
+			{
+				if (!isalnum(c) && c != '_')
+				{
+					_color(78);
+					cerr << "错误:组名 '" << name << "' 包含非法字符,只允许包含大小写字母,数字和下划线\n请手动修改groups.txt" << endl;
+					_color();
+					system("pause");
+					exit(1);
+				}
+			}
+			
+			// 校验随机属性
+			string randomAttr = parts[1];
+			for (char& c : randomAttr) c = tolower(c);
+			if (randomAttr != "random" && randomAttr != "order")
+			{
+				_color(78);
+				cerr << "错误:组 '"<<name<<"' 的属性 '" << parts[1] << "' 无效,只允许为order/random\n请手动修改groups.txt" << endl;
+				_color();
+				system("pause");
+				exit(1);
+			}
+			
+			// 校验团队属性
+			string teamAttr = parts[2];
+			for (char& c : teamAttr) c = tolower(c);
+			if (teamAttr != "team" && teamAttr != "all")
+			{
+				_color(78);
+				cerr << "错误:组 '"<<name<<"' 的属性 '" << parts[2] << "' 无效,只允许为team/all\n请手动修改groups.txt" << endl;
+				_color();
+				system("pause");
+				exit(1);
+			}
+			
+			// 赋值
+			current.name = name;
+			current.isRandom = (randomAttr == "random");
+			current.isTeam = (teamAttr == "team");
 		}
 		else
 		{
@@ -397,7 +456,7 @@ int main()
 	_color(11);
 	cout << "by IQ Online Studio, github.com/iqonli; used AI.\n";
 	_color();
-	cout << "本程序不支持程序内编辑句子,仅支持在本地使用文本编辑器编辑groups.txt,编辑完成请重启程序\n";
+	cout << "新手请查看README.md,本程序不支持程序内编辑句子,仅支持在本地使用文本编辑器编辑groups.txt,编辑完成请重启程序\n";
 	
 	const string progName = "cs2auto";
 	string cs2Path = FindCS2Path();
@@ -420,8 +479,13 @@ int main()
 		_color(12);
 		cout << "未找到有效组信息,请按下面的提示修改groups.txt\n\n";
 		_color(176);
-		cout << ";注释\n:组名1,order,all\n句子1\n句子2\n:组名2,random,team\n句子A\n句子B\n句子C\n;order=顺序发送\n;random=随机发送\n;all=全部聊天\n;team=\n\n";
+		ifstream file("groups-e.g..txt");
+		string content(
+							(istreambuf_iterator<char>(file)),
+							istreambuf_iterator<char>()
+							);
 		
+		cout << content;
 		_color();
 		system("pause");
 		return 1;
@@ -433,8 +497,8 @@ int main()
 	{
 		cout << "\n======== MENU ========\n";
 		cout << "cfg文件夹路径:" << cfgDir << "\n";
-		cout << "1=清空并重新生成所有CFG\n";
-		cout << "2=清空生成的CFG\n";
+		cout << "1=(立即应用键位)清空并重新生成所有CFG\n";
+		cout << "2=(删除键位)清空生成的CFG\n";
 		cout << "3=修改CS2路径\n";
 		cout << "4=重新绑定键位\n";
 		cout << "5=退出\n";
@@ -453,7 +517,7 @@ int main()
 			_color(160);
 			cout << "CFG已重新生成,随机组已打乱顺序\n";
 			_color(11);
-			cout << "在游戏控制台输入 'exec autoexec.cfg' 以刷新。\n";
+			cout << "在游戏控制台输入 'exec autoexec.cfg' 以刷新,注意在CS2>设置>游戏设置>游戏中启用控制台。\n";
 			if (showtips)
 			{
 				_color(10);
