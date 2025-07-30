@@ -10,6 +10,8 @@
 #include <random>
 #define i_input _color(14);printf(">");_color();
 
+bool showtips = true;
+
 using namespace std;
 namespace fs = filesystem;
 
@@ -252,13 +254,11 @@ void GenerateManagerAndAutoexec(const vector<Group>& groups, const fs::path& cfg
 	{
 		lines.erase(lines.begin() + start, lines.begin() + end + 1);
 	}
-	
-	lines.push_back("");
 	lines.push_back("// cs2auto start");
 	lines.push_back("exec " + managerName);
 	lines.push_back("// cs2auto end");
 	// 添加提示信息到autoexec.cfg
-	lines.push_back("CS2 Auto Message Sender by IQ Online Studio, github.com/iqonli/cs2auto");
+	lines.push_back("// CS2 Auto Message Sender by IQ Online Studio, github.com/iqonli/cs2auto");
 	
 	ofstream out(autoexec);
 	for (const auto& line : lines) out << line << "\n";
@@ -310,6 +310,15 @@ void ClearCFGs(const fs::path& cfgDir, const string& progName)
 		lines.erase(lines.begin() + start, lines.begin() + end + 1);
 	}
 	
+	for (size_t i = 0; i < lines.size(); ++i)
+	{
+		if (lines[i] == "// CS2 Auto Message Sender by IQ Online Studio, github.com/iqonli/cs2auto")
+		{
+			lines.erase(lines.begin() + i);
+			break;
+		}
+	}
+	
 	ofstream out(autoexec);
 	for (const auto& l : lines) out << l << "\n";
 }
@@ -355,6 +364,31 @@ void BindGroupKeys(vector<Group>& groups)
 	_color();
 }
 
+void NormalizePathSeparators(fs::path& path)
+{
+	std::string pathStr = path.string();
+	std::string normalized;
+	
+	for (size_t i = 0; i < pathStr.size(); ++i) {
+		// 当前字符是路径分隔符
+		if (pathStr[i] == '/' || pathStr[i] == '\\') {
+			// 添加单个斜杠
+			normalized += '/';
+			// 跳过所有连续的分隔符
+			while (i + 1 < pathStr.size() && 
+				   (pathStr[i+1] == '/' || pathStr[i+1] == '\\')) {
+				++i;
+			}
+		} else {
+			// 非分隔符字符直接添加
+			normalized += pathStr[i];
+		}
+	}
+	
+	// 更新路径
+	path = fs::path(normalized);
+}
+
 int main()
 {
 	SetConsoleTitle("CS2 Auto Message Sender");
@@ -363,6 +397,7 @@ int main()
 	_color(11);
 	cout << "by IQ Online Studio, github.com/iqonli; used AI.\n";
 	_color();
+	cout << "本程序不支持程序内编辑句子,仅支持在本地使用文本编辑器编辑groups.txt,编辑完成请重启程序\n";
 	
 	const string progName = "cs2auto";
 	string cs2Path = FindCS2Path();
@@ -376,6 +411,7 @@ int main()
 		if (cs2Path.empty()) return 1;
 	}
 	fs::path cfgDir = fs::path(cs2Path) / "game" / "csgo" / "cfg";
+	NormalizePathSeparators(cfgDir);
 	if (!fs::exists(cfgDir)) fs::create_directories(cfgDir);
 	
 	vector<Group> groups = ReadGroups("groups.txt");
@@ -418,6 +454,14 @@ int main()
 			cout << "CFG已重新生成,随机组已打乱顺序\n";
 			_color(11);
 			cout << "在游戏控制台输入 'exec autoexec.cfg' 以刷新。\n";
+			if (showtips)
+			{
+				_color(10);
+				cout << "如果想每次启动CS2时自动加载功能,需要在Steam>库>CS2右键>属性>高级用户可以选择输入对启动选项的修改的框里面输入:\n";
+				_color(11);
+				cout << "+exec autoexec.cfg\n";
+				showtips=false;
+			}
 			_color();
 			break;
 		case 2:
