@@ -35,7 +35,7 @@
 
 ## 安装与使用
 
-1. 下载[release](https://github.com/iqonli/cs2auto/releases/tag/Publish)版的zip文件
+1. 下载[release](https://github.com/iqonli/cs2auto/releases)版的zip文件
 1. 按照`groups-e.g..txt`的格式，使用文本编辑器编辑`groups.txt`，添加或删除组、属性、句子
 1. 运行`cs2auto.exe`，为各组绑定键位
 1. 输入1或2（根据需要自行选择：如果句子复杂，包括特殊字符，选1，句子简单选2）并回车来应用键位
