@@ -1,3 +1,19 @@
+// [cs2auto.cpp]
+// Copyright (C) [2025] [IQ Online Studio / PerryDing]
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -10,10 +26,14 @@
 #include <random>
 #include <cstdlib>
 #include <string>
+#include <regex>
 #define i_input _color(14);printf(">");_color();
 
 using namespace std;
 namespace fs = filesystem;
+bool showtips = true;
+string Cs2autoVer = "1.1";
+string Cs2auto = "// CS2 Auto Message Sender " + Cs2autoVer + " by IQ Online Studio, github.com/iqonli/cs2auto";
 
 // 将宽字符串转换为UTF-8字节流
 vector<BYTE> WideToUTF8(const wstring& wstr)
@@ -36,10 +56,6 @@ vector<BYTE> StringToUTF8(const string& str)
 	// 再转换为UTF-8
 	return WideToUTF8(wstring(wideStr.data()));
 }
-
-bool showtips = true;
-string Cs2autoVer = "1.0";
-string Cs2auto = "// CS2 Auto Message Sender " + Cs2autoVer + " by IQ Online Studio, github.com/iqonli/cs2auto";
 
 void _color(int __c=7)//着色
 {
@@ -69,15 +85,50 @@ vector<string> Split(const string& s, char delim)
 	return res;
 }
 
-// 转义消息中的双引号
-string EscapeMessage(const string& msg)
+string EscapeMessage(const string& msg, const string& groupName, int lineNumber, bool escapeEnabled)
 {
+	if (!escapeEnabled)
+	{
+		return msg;
+	}
+	
 	string escaped;
+	bool hasDoubleQuote = false;
+	bool hasBackslash = false;
+	
 	for (char c : msg)
 	{
-		if (c == '"') escaped += "\"\"";
-		else escaped += c;
+		if (c == '"')
+		{
+			escaped += "“";  // 全角前引号
+			hasDoubleQuote = true;
+		}
+		else if (c == '\\')
+		{
+			escaped += "/";   // 正斜杠
+			hasBackslash = true;
+		}
+		else
+		{
+			escaped += c;
+		}
 	}
+	
+	// 分别提示存在双引号和反斜杠并已转换
+	if (hasDoubleQuote)
+	{
+		_color(11);
+		cout << "组[" << groupName << "].line " << lineNumber << "=[" << msg << "]中存在非法字符\",已转换。" << endl;
+		_color();
+	}
+	
+	if (hasBackslash)
+	{
+		_color(11);
+		cout << "组[" << groupName << "].line " << lineNumber << "=[" << msg << "]中存在非法字符\\,已转换。" << endl;
+		_color();
+	}
+	
 	return escaped;
 }
 
@@ -231,7 +282,7 @@ string FindCS2Path()
 }
 
 // 分开方法：生成组对应的CFG文件（单独句子文件+选择器）
-void GenerateGroupCFGsSeparate(const Group& group, const fs::path& cfgDir, const string& progName)
+void GenerateGroupCFGsSeparate(const Group& group, const fs::path& cfgDir, const string& progName, bool escapeEnabled)
 {
 	if (group.lines.empty()) return;
 	string sayCmd = group.isTeam ? "say_team" : "say";
@@ -254,7 +305,7 @@ void GenerateGroupCFGsSeparate(const Group& group, const fs::path& cfgDir, const
 		{
 			// 转换为UTF-8字节流并写入
 			string content = "// cs2auto - group [" + group.name + "].line " + to_string(i + 1) + "\n"
-			+ sayCmd + " \"" + EscapeMessage(useLines[i]) + "\"\n"
+			+ sayCmd + " \"" + EscapeMessage(useLines[i], group.name, i + 1, escapeEnabled) + "\"\n"
 			+ Cs2auto + "\n";
 			auto utf8Data = StringToUTF8(content);
 			f.write((const char*)utf8Data.data(), utf8Data.size());
@@ -288,7 +339,7 @@ void GenerateGroupCFGsSeparate(const Group& group, const fs::path& cfgDir, const
 }
 
 // 整合方法：生成组对应的CFG文件（直接嵌入指令）
-void GenerateGroupCFGsIntegrated(const Group& group, const fs::path& cfgDir, const string& progName)
+void GenerateGroupCFGsIntegrated(const Group& group, const fs::path& cfgDir, const string& progName, bool escapeEnabled)
 {
 	if (group.lines.empty()) return;
 	string sayCmd = group.isTeam ? "say_team" : "say";
@@ -316,7 +367,7 @@ void GenerateGroupCFGsIntegrated(const Group& group, const fs::path& cfgDir, con
 		{
 			size_t next = (i + 1) % count;
 			content += "alias " + progName + "_" + group.name + "_" + to_string(i)
-			+ " \"" + sayCmd + " \"" + EscapeMessage(useLines[i]) + "\""
+			+ " \"" + sayCmd + " \"" + EscapeMessage(useLines[i], group.name, i + 1, escapeEnabled) + "\""
 			+ "; alias " + progName + "_" + group.name + "_next " + progName + "_" + group.name + "_" + to_string(next) + "\"\n";
 		}
 		content += "alias " + progName + "_" + group.name + "_next " + progName + "_" + group.name + "_0\n"
@@ -451,12 +502,19 @@ void ClearCFGs(const fs::path& cfgDir, const string& progName)
 		lines.erase(lines.begin() + start, lines.begin() + end + 1);
 	}
 	
-	for (size_t i = 0; i < lines.size(); ++i)
+	// 使用正则表达式匹配所有相关标识行
+	const regex pattern(R"(^// CS2 Auto Message Sender.*)");
+	
+	// 循环删除所有匹配的行
+	for (size_t i = 0; i < lines.size(); )
 	{
-		if (lines[i] == Cs2auto)
+		if (regex_match(lines[i], pattern))
 		{
 			lines.erase(lines.begin() + i);
-			break;
+		}
+		else
+		{
+			i++;
 		}
 	}
 	
@@ -602,70 +660,97 @@ int main()
 		
 		switch (choice)
 		{
-		case 1:
-			ClearCFGs(cfgDir, progName);
-			for (const auto& g : groups) GenerateGroupCFGsSeparate(g, cfgDir, progName);
-			GenerateManagerAndAutoexec(groups, cfgDir, progName);
-			_color(160);
-			cout << "\n分开模式CFG已生成,随机组已打乱顺序\n";
-			_color(11);
-			cout << "在游戏控制台输入'exec autoexec.cfg'以刷新,注意在CS2>设置>游戏设置>游戏中启用控制台。\n";
-			if (showtips)
+			case 1:
 			{
-				_color(10);
-				cout << "如果想每次启动CS2时自动加载功能,需要在Steam>库>CS2右键>属性>启动选项中输入:\n";
+				cout << "是否转义句子中存在的危险字符?(1=启用,0=不启用)";i_input
+				int escapeChoice;
+				cin >> escapeChoice;
+				cin.ignore();
+				bool escapeEnabled = (escapeChoice == 1);
+				
+				ClearCFGs(cfgDir, progName);
+				for (const auto& g : groups) GenerateGroupCFGsSeparate(g, cfgDir, progName, escapeEnabled);
+				GenerateManagerAndAutoexec(groups, cfgDir, progName);
+				_color(160);
+				cout << "\n分开模式CFG已生成,随机组已打乱顺序\n";
 				_color(11);
-				cout << "+exec autoexec.cfg\n";
-				showtips=false;
+				cout << "在游戏控制台输入'exec autoexec.cfg'以刷新,注意在CS2>设置>游戏设置>游戏中启用控制台。\n";
+				if (showtips)
+				{
+					_color(10);
+					cout << "如果想每次启动CS2时自动加载功能,需要在Steam>库>CS2右键>属性>启动选项中输入:\n";
+					_color(11);
+					cout << "+exec autoexec.cfg\n";
+					showtips=false;
+				}
+				_color();
+				break;
 			}
-			_color();
-			break;
-		case 2:
-			ClearCFGs(cfgDir, progName);
-			for (const auto& g : groups) GenerateGroupCFGsIntegrated(g, cfgDir, progName);
-			GenerateManagerAndAutoexec(groups, cfgDir, progName);
-			_color(160);
-			cout << "\n整合模式CFG已生成,随机组已打乱顺序\n";
-			_color(11);
-			cout << "在游戏控制台输入'exec autoexec.cfg'以刷新,注意在CS2>设置>游戏设置>游戏中启用控制台。\n";
-			if (showtips)
+			case 2:
 			{
-				_color(10);
-				cout << "如果想每次启动CS2时自动加载功能,需要在Steam>库>CS2右键>属性>启动选项中输入:\n";
+				cout << "是否转义句子中存在的危险字符?(1=启用,0=不启用)";i_input
+				int escapeChoice;
+				cin >> escapeChoice;
+				cin.ignore();
+				bool escapeEnabled = (escapeChoice == 1);
+				
+				ClearCFGs(cfgDir, progName);
+				for (const auto& g : groups) GenerateGroupCFGsIntegrated(g, cfgDir, progName, escapeEnabled);
+				GenerateManagerAndAutoexec(groups, cfgDir, progName);
+				_color(160);
+				cout << "\n整合模式CFG已生成,随机组已打乱顺序\n";
 				_color(11);
-				cout << "+exec autoexec.cfg\n";
-				showtips=false;
+				cout << "在游戏控制台输入'exec autoexec.cfg'以刷新,注意在CS2>设置>游戏设置>游戏中启用控制台。\n";
+				if (showtips)
+				{
+					_color(10);
+					cout << "如果想每次启动CS2时自动加载功能,需要在Steam>库>CS2右键>属性>启动选项中输入:\n";
+					_color(11);
+					cout << "+exec autoexec.cfg\n";
+					showtips=false;
+				}
+				_color();
+				break;
 			}
-			_color();
-			break;
-		case 3:
-			ClearCFGs(cfgDir, progName);
-			_color(160);
-			cout << "\n所有程序生成的CFG已清空\n";
-			_color();
-			break;
-		case 4:
-			cs2Path = SetCS2PathManual();
-			if (!cs2Path.empty())
+			case 3:
 			{
-				cfgDir = fs::path(cs2Path) / "game" / "csgo" / "cfg";
-				fs::create_directories(cfgDir);
 				ClearCFGs(cfgDir, progName);
 				_color(160);
-				cout << "\n路径已更新,请重新选择生成模式\n";
+				cout << "\n所有程序生成的CFG已清空\n";
+				_color();
+				break;
+			}
+			case 4:
+			{
+				cs2Path = SetCS2PathManual();
+				if (!cs2Path.empty())
+				{
+					cfgDir = fs::path(cs2Path) / "game" / "csgo" / "cfg";
+					fs::create_directories(cfgDir);
+					ClearCFGs(cfgDir, progName);
+					_color(160);
+					cout << "\n路径已更新,请重新选择生成模式\n";
+					_color();
+				}
+				break;
+			}
+			case 5:
+			{
+				cout << "\n重新为各组绑定键位...\n";
+				BindGroupKeys(groups);
+				break;
+			}
+			case 6:
+			{
+				return 0;
+			}
+			default:
+			{
+				_color(12);
+				cout << "\n无效选择\n";
 				_color();
 			}
-			break;
-		case 5:
-			cout << "\n重新为各组绑定键位...\n";
-			BindGroupKeys(groups);
-			break;
-		case 6:
-			return 0;
-		default:
-			_color(12);
-			cout << "\n无效选择\n";
-			_color();
 		}
 	}
 }
+
