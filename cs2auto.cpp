@@ -9,12 +9,37 @@
 #include <algorithm>
 #include <random>
 #include <cstdlib>
+#include <string>
 #define i_input _color(14);printf(">");_color();
-
-bool showtips = true;
 
 using namespace std;
 namespace fs = filesystem;
+
+// 将宽字符串转换为UTF-8字节流
+vector<BYTE> WideToUTF8(const wstring& wstr)
+{
+	int bufferSize = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, nullptr, 0, nullptr, nullptr);
+	std::vector<BYTE> utf8Bytes(bufferSize);
+	WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, (LPSTR)utf8Bytes.data(), bufferSize, nullptr, nullptr);
+	utf8Bytes.pop_back(); // 移除自动添加的null终止符
+	return utf8Bytes;
+}
+
+// 将普通字符串转换为UTF-8字节流
+vector<BYTE> StringToUTF8(const string& str)
+{
+	// 先转换为宽字符串
+	int wideSize = MultiByteToWideChar(CP_ACP, 0, str.c_str(), -1, nullptr, 0);
+	std::vector<WCHAR> wideStr(wideSize);
+	MultiByteToWideChar(CP_ACP, 0, str.c_str(), -1, wideStr.data(), wideSize);
+	
+	// 再转换为UTF-8
+	return WideToUTF8(wstring(wideStr.data()));
+}
+
+bool showtips = true;
+string Cs2autoVer = "1.0";
+string Cs2auto = "// CS2 Auto Message Sender " + Cs2autoVer + " by IQ Online Studio, github.com/iqonli/cs2auto";
 
 void _color(int __c=7)//着色
 {
@@ -102,7 +127,7 @@ vector<Group> ReadGroups(const string& filename)
 				if (!isalnum(c) && c != '_')
 				{
 					_color(78);
-					cerr << "错误:组名 '" << name << "' 包含非法字符,只允许包含大小写字母,数字和下划线\n请手动修改groups.txt" << endl;
+					cerr << "错误:组名[" << name << "]包含非法字符,只允许包含大小写字母,数字和下划线\n请手动修改groups.txt" << endl;
 					_color();
 					system("pause");
 					exit(1);
@@ -115,7 +140,7 @@ vector<Group> ReadGroups(const string& filename)
 			if (randomAttr != "random" && randomAttr != "order")
 			{
 				_color(78);
-				cerr << "错误:组 '"<<name<<"' 的属性 '" << parts[1] << "' 无效,只允许为order/random\n请手动修改groups.txt" << endl;
+				cerr << "错误:组["<<name<<"]的第一个属性[" << parts[1] << "]无效,只允许为order/random\n请手动修改groups.txt" << endl;
 				_color();
 				system("pause");
 				exit(1);
@@ -127,7 +152,7 @@ vector<Group> ReadGroups(const string& filename)
 			if (teamAttr != "team" && teamAttr != "all")
 			{
 				_color(78);
-				cerr << "错误:组 '"<<name<<"' 的属性 '" << parts[2] << "' 无效,只允许为team/all\n请手动修改groups.txt" << endl;
+				cerr << "错误:组["<<name<<"]的第二个属性[" << parts[2] << "]无效,只允许为team/all\n请手动修改groups.txt" << endl;
 				_color();
 				system("pause");
 				exit(1);
@@ -205,8 +230,8 @@ string FindCS2Path()
 	return "";
 }
 
-// 生成组对应的CFG文件
-void GenerateGroupCFGs(const Group& group, const fs::path& cfgDir, const string& progName)
+// 分开方法：生成组对应的CFG文件（单独句子文件+选择器）
+void GenerateGroupCFGsSeparate(const Group& group, const fs::path& cfgDir, const string& progName)
 {
 	if (group.lines.empty()) return;
 	string sayCmd = group.isTeam ? "say_team" : "say";
@@ -220,41 +245,86 @@ void GenerateGroupCFGs(const Group& group, const fs::path& cfgDir, const string&
 	}
 	size_t count = useLines.size();  // 使用处理后的句子列表
 	
-	// 生成句子文件（改用打乱后的useLines）
+	// 生成句子文件
 	for (size_t i = 0; i < count; ++i)
 	{
 		string filename = progName + "_" + group.name + "_" + to_string(i + 1) + ".cfg";
-		ofstream f(cfgDir / filename);
+		ofstream f(cfgDir / filename, ios::binary);  // 二进制模式写入
 		if (f.is_open())
 		{
-			f << "// cs2auto generated - " << group.name << " line " << i + 1 << "\n";
-			f << sayCmd << " \"" << EscapeMessage(useLines[i]) << "\"\n";
-			// 添加提示信息
-			f << "// CS2 Auto Message Sender by IQ Online Studio, github.com/iqonli/cs2auto\n";
+			// 转换为UTF-8字节流并写入
+			string content = "// cs2auto - group [" + group.name + "].line " + to_string(i + 1) + "\n"
+			+ sayCmd + " \"" + EscapeMessage(useLines[i]) + "\"\n"
+			+ Cs2auto + "\n";
+			auto utf8Data = StringToUTF8(content);
+			f.write((const char*)utf8Data.data(), utf8Data.size());
 		}
 	}
 	
-	// 生成选择器文件（随机组复用顺序模式的alias逻辑）
+	// 生成选择器文件
 	string selectorName = progName + "_" + group.name + "_selector.cfg";
-	ofstream sel(cfgDir / selectorName);
+	ofstream sel(cfgDir / selectorName, ios::binary);  // 二进制模式写入
 	if (sel.is_open())
 	{
-		sel << "// cs2auto selector for group: " << group.name
-		<< " (mode: " << (group.isRandom ? "random" : "order")
-		<< ", target: " << (group.isTeam ? "team" : "all") << ")\n";
+		string content = "// cs2auto selector for group [" + group.name
+		+ "], [" + (group.isRandom ? "random" : "order")
+		+ "][" + (group.isTeam ? "team" : "all") + "]\n";
 		
-		// 统一使用顺序模式的alias链（因为随机组已提前打乱顺序）
+		// 顺序模式的alias链
 		for (size_t i = 0; i < count; ++i)
 		{
 			size_t next = (i + 1) % count;
-			sel << "alias " << progName << "_" << group.name << "_" << i
-			<< " \"exec " << progName << "_" << group.name << "_" << i + 1
-			<< "; alias " << progName << "_" << group.name << "_next " << progName << "_" << group.name << "_" << next << "\"\n";
+			content += "alias " + progName + "_" + group.name + "_" + to_string(i)
+			+ " \"exec " + progName + "_" + group.name + "_" + to_string(i + 1)
+			+ "; alias " + progName + "_" + group.name + "_next " + progName + "_" + group.name + "_" + to_string(next) + "\"\n";
 		}
-		sel << "alias " << progName << "_" << group.name << "_next " << progName << "_" << group.name << "_0\n";
-		sel << progName << "_" << group.name << "_next\n";
-		// 添加提示信息
-		sel << "// CS2 Auto Message Sender by IQ Online Studio, github.com/iqonli/cs2auto\n";
+		content += "alias " + progName + "_" + group.name + "_next " + progName + "_" + group.name + "_0\n"
+//		+ progName + "_" + group.name + "_next\n"
+		+ Cs2auto + "\n";
+		
+		auto utf8Data = StringToUTF8(content);
+		sel.write((const char*)utf8Data.data(), utf8Data.size());
+	}
+}
+
+// 整合方法：生成组对应的CFG文件（直接嵌入指令）
+void GenerateGroupCFGsIntegrated(const Group& group, const fs::path& cfgDir, const string& progName)
+{
+	if (group.lines.empty()) return;
+	string sayCmd = group.isTeam ? "say_team" : "say";
+	
+	vector<string> useLines = group.lines;  // 复制原始句子
+	if (group.isRandom)
+	{
+		// 用当前时间做种子，确保每次生成打乱顺序不同
+		static mt19937 rng(time(nullptr));
+		shuffle(useLines.begin(), useLines.end(), rng);
+	}
+	size_t count = useLines.size();  // 使用处理后的句子列表
+	
+	// 生成选择器文件（直接包含say指令）
+	string selectorName = progName + "_" + group.name + "_selector.cfg";
+	ofstream sel(cfgDir / selectorName, ios::binary);  // 二进制模式写入
+	if (sel.is_open())
+	{
+		string content = "// cs2auto selector for group [" + group.name
+		+ "], [" + (group.isRandom ? "random" : "order")
+		+ "][" + (group.isTeam ? "team" : "all") + "]\n";
+		
+		// 直接在alias中包含say指令
+		for (size_t i = 0; i < count; ++i)
+		{
+			size_t next = (i + 1) % count;
+			content += "alias " + progName + "_" + group.name + "_" + to_string(i)
+			+ " \"" + sayCmd + " \"" + EscapeMessage(useLines[i]) + "\""
+			+ "; alias " + progName + "_" + group.name + "_next " + progName + "_" + group.name + "_" + to_string(next) + "\"\n";
+		}
+		content += "alias " + progName + "_" + group.name + "_next " + progName + "_" + group.name + "_0\n"
+//		+ progName + "_" + group.name + "_next\n"
+		+ Cs2auto + "\n";
+		
+		auto utf8Data = StringToUTF8(content);
+		sel.write((const char*)utf8Data.data(), utf8Data.size());
 	}
 }
 
@@ -262,10 +332,10 @@ void GenerateGroupCFGs(const Group& group, const fs::path& cfgDir, const string&
 void GenerateManagerAndAutoexec(const vector<Group>& groups, const fs::path& cfgDir, const string& progName)
 {
 	string managerName = progName + "_manager.cfg";
-	ofstream manager(cfgDir / managerName);
+	ofstream manager(cfgDir / managerName, ios::binary);  // 二进制模式写入
 	if (manager.is_open())
 	{
-		manager << "// cs2auto key bindings and alias definitions\n";
+		string content = "// cs2auto key bindings and alias definitions\n";
 		
 		// 先执行每个组的selector.cfg，注册alias
 		for (const auto& g : groups)
@@ -273,23 +343,26 @@ void GenerateManagerAndAutoexec(const vector<Group>& groups, const fs::path& cfg
 			if (!g.lines.empty())  // 只处理有内容的组
 			{
 				string selector = progName + "_" + g.name + "_selector.cfg";
-				manager << "exec " << selector << "\n";  // 执行selector文件，加载alias
+				content += "exec " + selector + "\n";  // 执行selector文件，加载alias
 			}
 		}
 		
 		// 再绑定键位（此时alias已注册）
-		manager << "\n// Key bindings\n";
+		content += "\n// Key bindings\n";
 		for (const auto& g : groups)
 		{
 			if (g.bindKey != '\0')
 			{
 				string trigger = progName + "_" + g.name + "_next";
-				manager << "bind \"" << g.bindKey << "\" \"" << trigger << "\"\n";
+				content += "bind \"" + string(1, g.bindKey) + "\" \"" + trigger + "\"\n";
 			}
 		}
-		// 添加提示信息
-		manager << "// CS2 Auto Message Sender by IQ Online Studio, github.com/iqonli/cs2auto\n";
+		content += Cs2auto + "\n";
+		
+		auto utf8Data = StringToUTF8(content);
+		manager.write((const char*)utf8Data.data(), utf8Data.size());
 	}
+	
 	fs::path autoexec = cfgDir / "autoexec.cfg";
 	vector<string> lines;
 	if (fs::exists(autoexec))
@@ -317,10 +390,19 @@ void GenerateManagerAndAutoexec(const vector<Group>& groups, const fs::path& cfg
 	lines.push_back("exec " + managerName);
 	lines.push_back("// cs2auto end");
 	// 添加提示信息到autoexec.cfg
-	lines.push_back("// CS2 Auto Message Sender by IQ Online Studio, github.com/iqonli/cs2auto");
+	lines.push_back(Cs2auto);
 	
-	ofstream out(autoexec);
-	for (const auto& line : lines) out << line << "\n";
+	ofstream out(autoexec, ios::binary);  // 二进制模式写入
+	if (out.is_open())
+	{
+		string content;
+		for (const auto& line : lines)
+		{
+			content += line + "\n";
+		}
+		auto utf8Data = StringToUTF8(content);
+		out.write((const char*)utf8Data.data(), utf8Data.size());
+	}
 }
 
 // 清空生成的CFG文件
@@ -371,15 +453,24 @@ void ClearCFGs(const fs::path& cfgDir, const string& progName)
 	
 	for (size_t i = 0; i < lines.size(); ++i)
 	{
-		if (lines[i] == "// CS2 Auto Message Sender by IQ Online Studio, github.com/iqonli/cs2auto")
+		if (lines[i] == Cs2auto)
 		{
 			lines.erase(lines.begin() + i);
 			break;
 		}
 	}
 	
-	ofstream out(autoexec);
-	for (const auto& l : lines) out << l << "\n";
+	ofstream out(autoexec, ios::binary);  // 二进制模式写入
+	if (out.is_open())
+	{
+		string content;
+		for (const auto& l : lines)
+		{
+			content += l + "\n";
+		}
+		auto utf8Data = StringToUTF8(content);
+		out.write((const char*)utf8Data.data(), utf8Data.size());
+	}
 }
 
 // 手动设置CS2路径
@@ -404,9 +495,9 @@ void BindGroupKeys(vector<Group>& groups)
 {
 	for (auto& g : groups)
 	{
-		cout << "为组[" << g.name << "] ("
+		cout << "\n为组[" << g.name << "]("
 		<< (g.isRandom ? "随机" : "顺序") << ","
-		<< (g.isTeam ? "TEAM" : "ALL") << ") 绑定键位(字母/数字,留空不绑定)";i_input
+		<< (g.isTeam ? "TEAM" : "ALL") << ")绑定键位(字母/数字,不区分大小写,留空不绑定)\n";i_input
 		string input;
 		getline(cin, input);
 		if (input.size() == 1 && isalnum(input[0]))
@@ -450,11 +541,11 @@ void NormalizePathSeparators(fs::path& path)
 
 int main()
 {
-	SetConsoleTitle("CS2 Auto Message Sender");
+	SetConsoleTitle(("CS2 Auto Message Sender " + Cs2autoVer).c_str());
 	_color(10);
-	cout << "欢迎来到 CS2 Auto Message Sender\n";
+	cout << "欢迎来到 CS2 Auto Message Sender " + Cs2autoVer + "\n";
 	_color(11);
-	cout << "by IQ Online Studio, github.com/iqonli; used AI.\n";
+	cout << "by IQ Online Studio, github.com/iqonli/cs2auto; used AI.\n";
 	_color();
 	cout << "新手请查看README.md,本程序不支持程序内编辑句子,仅支持在本地使用文本编辑器编辑groups.txt,编辑完成请重启程序\n";
 	
@@ -481,9 +572,9 @@ int main()
 		_color(176);
 		ifstream file("groups-e.g..txt");
 		string content(
-							(istreambuf_iterator<char>(file)),
-							istreambuf_iterator<char>()
-							);
+					   (istreambuf_iterator<char>(file)),
+					   istreambuf_iterator<char>()
+					   );
 		
 		cout << content;
 		_color();
@@ -497,12 +588,13 @@ int main()
 	{
 		cout << "\n======== MENU ========\n";
 		cout << "cfg文件夹路径:" << cfgDir << "\n";
-		cout << "1=(立即应用键位)清空并重新生成所有CFG\n";
-		cout << "2=(删除键位)清空生成的CFG\n";
-		cout << "3=修改CS2路径\n";
-		cout << "4=重新绑定键位\n";
-		cout << "5=退出\n";
-		cout << "选择操作(1-5)";i_input
+		cout << "1=(立即应用键位)清空并重新生成所有CFG/每句话一个cfg,不易出错,方便修改\n";
+		cout << "2=(立即应用键位)清空并重新生成所有CFG/所有句子整合到一个cfg,文件清爽\n";
+		cout << "3=(删除键位)清空生成的CFG\n";
+		cout << "4=修改CS2路径\n";
+		cout << "5=重新绑定键位\n";
+		cout << "6=退出\n";
+		cout << "\n选择操作(1-6)";i_input
 		
 		int choice;
 		cin >> choice;
@@ -512,16 +604,16 @@ int main()
 		{
 		case 1:
 			ClearCFGs(cfgDir, progName);
-			for (const auto& g : groups) GenerateGroupCFGs(g, cfgDir, progName);
+			for (const auto& g : groups) GenerateGroupCFGsSeparate(g, cfgDir, progName);
 			GenerateManagerAndAutoexec(groups, cfgDir, progName);
 			_color(160);
-			cout << "CFG已重新生成,随机组已打乱顺序\n";
+			cout << "\n分开模式CFG已生成,随机组已打乱顺序\n";
 			_color(11);
-			cout << "在游戏控制台输入 'exec autoexec.cfg' 以刷新,注意在CS2>设置>游戏设置>游戏中启用控制台。\n";
+			cout << "在游戏控制台输入'exec autoexec.cfg'以刷新,注意在CS2>设置>游戏设置>游戏中启用控制台。\n";
 			if (showtips)
 			{
 				_color(10);
-				cout << "如果想每次启动CS2时自动加载功能,需要在Steam>库>CS2右键>属性>高级用户可以选择输入对启动选项的修改的框里面输入:\n";
+				cout << "如果想每次启动CS2时自动加载功能,需要在Steam>库>CS2右键>属性>启动选项中输入:\n";
 				_color(11);
 				cout << "+exec autoexec.cfg\n";
 				showtips=false;
@@ -530,33 +622,49 @@ int main()
 			break;
 		case 2:
 			ClearCFGs(cfgDir, progName);
+			for (const auto& g : groups) GenerateGroupCFGsIntegrated(g, cfgDir, progName);
+			GenerateManagerAndAutoexec(groups, cfgDir, progName);
 			_color(160);
-			cout << "所有程序生成的CFG已清空\n";
+			cout << "\n整合模式CFG已生成,随机组已打乱顺序\n";
+			_color(11);
+			cout << "在游戏控制台输入'exec autoexec.cfg'以刷新,注意在CS2>设置>游戏设置>游戏中启用控制台。\n";
+			if (showtips)
+			{
+				_color(10);
+				cout << "如果想每次启动CS2时自动加载功能,需要在Steam>库>CS2右键>属性>启动选项中输入:\n";
+				_color(11);
+				cout << "+exec autoexec.cfg\n";
+				showtips=false;
+			}
 			_color();
 			break;
 		case 3:
+			ClearCFGs(cfgDir, progName);
+			_color(160);
+			cout << "\n所有程序生成的CFG已清空\n";
+			_color();
+			break;
+		case 4:
 			cs2Path = SetCS2PathManual();
 			if (!cs2Path.empty())
 			{
 				cfgDir = fs::path(cs2Path) / "game" / "csgo" / "cfg";
 				fs::create_directories(cfgDir);
 				ClearCFGs(cfgDir, progName);
-				for (const auto& g : groups) GenerateGroupCFGs(g, cfgDir, progName);
-				GenerateManagerAndAutoexec(groups, cfgDir, progName);
 				_color(160);
-				cout << "路径已更新,CFG已重新生成,随机组已打乱顺序\n";
+				cout << "\n路径已更新,请重新选择生成模式\n";
 				_color();
 			}
 			break;
-		case 4:
+		case 5:
 			cout << "\n重新为各组绑定键位...\n";
 			BindGroupKeys(groups);
 			break;
-		case 5:
+		case 6:
 			return 0;
 		default:
 			_color(12);
-			cout << "无效选择\n";
+			cout << "\n无效选择\n";
 			_color();
 		}
 	}
