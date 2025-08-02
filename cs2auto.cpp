@@ -32,7 +32,7 @@
 using namespace std;
 namespace fs = filesystem;
 bool showtips = true;
-string Cs2autoVer = "1.1";
+string Cs2autoVer = "1.2";
 string Cs2auto = "// CS2 Auto Message Sender " + Cs2autoVer + " by IQ Online Studio, github.com/iqonli/cs2auto";
 
 // 将宽字符串转换为UTF-8字节流
@@ -287,6 +287,10 @@ void GenerateGroupCFGsSeparate(const Group& group, const fs::path& cfgDir, const
 	if (group.lines.empty()) return;
 	string sayCmd = group.isTeam ? "say_team" : "say";
 	
+	// 创建组专用子文件夹
+	fs::path groupSubDir = cfgDir / ("cs2auto_" + group.name);
+	fs::create_directories(groupSubDir);
+	
 	vector<string> useLines = group.lines;  // 复制原始句子
 	if (group.isRandom)
 	{
@@ -296,11 +300,11 @@ void GenerateGroupCFGsSeparate(const Group& group, const fs::path& cfgDir, const
 	}
 	size_t count = useLines.size();  // 使用处理后的句子列表
 	
-	// 生成句子文件
+	// 生成句子文件（放入子文件夹）
 	for (size_t i = 0; i < count; ++i)
 	{
 		string filename = progName + "_" + group.name + "_" + to_string(i + 1) + ".cfg";
-		ofstream f(cfgDir / filename, ios::binary);  // 二进制模式写入
+		ofstream f(groupSubDir / filename, ios::binary);  // 二进制模式写入
 		if (f.is_open())
 		{
 			// 转换为UTF-8字节流并写入
@@ -312,7 +316,7 @@ void GenerateGroupCFGsSeparate(const Group& group, const fs::path& cfgDir, const
 		}
 	}
 	
-	// 生成选择器文件
+	// 生成选择器文件（位置不变，修改引用路径）
 	string selectorName = progName + "_" + group.name + "_selector.cfg";
 	ofstream sel(cfgDir / selectorName, ios::binary);  // 二进制模式写入
 	if (sel.is_open())
@@ -321,16 +325,15 @@ void GenerateGroupCFGsSeparate(const Group& group, const fs::path& cfgDir, const
 		+ "], [" + (group.isRandom ? "random" : "order")
 		+ "][" + (group.isTeam ? "team" : "all") + "]\n";
 		
-		// 顺序模式的alias链
+		// 顺序模式的alias链（引用子文件夹中的文件）
 		for (size_t i = 0; i < count; ++i)
 		{
 			size_t next = (i + 1) % count;
 			content += "alias " + progName + "_" + group.name + "_" + to_string(i)
-			+ " \"exec " + progName + "_" + group.name + "_" + to_string(i + 1)
+			+ " \"exec cs2auto_" + group.name + "/" + progName + "_" + group.name + "_" + to_string(i + 1)
 			+ "; alias " + progName + "_" + group.name + "_next " + progName + "_" + group.name + "_" + to_string(next) + "\"\n";
 		}
 		content += "alias " + progName + "_" + group.name + "_next " + progName + "_" + group.name + "_0\n"
-//		+ progName + "_" + group.name + "_next\n"
 		+ Cs2auto + "\n";
 		
 		auto utf8Data = StringToUTF8(content);
@@ -371,7 +374,6 @@ void GenerateGroupCFGsIntegrated(const Group& group, const fs::path& cfgDir, con
 			+ "; alias " + progName + "_" + group.name + "_next " + progName + "_" + group.name + "_" + to_string(next) + "\"\n";
 		}
 		content += "alias " + progName + "_" + group.name + "_next " + progName + "_" + group.name + "_0\n"
-//		+ progName + "_" + group.name + "_next\n"
 		+ Cs2auto + "\n";
 		
 		auto utf8Data = StringToUTF8(content);
@@ -466,14 +468,31 @@ void ClearCFGs(const fs::path& cfgDir, const string& progName)
 	size_t prefixLen = prefix.size();
 	size_t suffixLen = suffix.size();
 	
+	// 删除组专用子文件夹及其内容
 	for (const auto& entry : fs::directory_iterator(cfgDir))
 	{
-		string name = entry.path().filename().string();
-		bool hasPrefix = (name.size() >= prefixLen) && (name.substr(0, prefixLen) == prefix);
-		bool hasSuffix = (name.size() >= suffixLen) && (name.substr(name.size() - suffixLen) == suffix);
-		if (hasPrefix && hasSuffix)
+		if (entry.is_directory())
 		{
-			fs::remove(entry);
+			string dirName = entry.path().filename().string();
+			if (dirName.substr(0, 8) == "cs2auto_")  // 匹配cs2auto_前缀的文件夹
+			{
+				fs::remove_all(entry.path());
+			}
+		}
+	}
+	
+	// 删除selector和manager文件
+	for (const auto& entry : fs::directory_iterator(cfgDir))
+	{
+		if (entry.is_regular_file())
+		{
+			string name = entry.path().filename().string();
+			bool hasPrefix = (name.size() >= prefixLen) && (name.substr(0, prefixLen) == prefix);
+			bool hasSuffix = (name.size() >= suffixLen) && (name.substr(name.size() - suffixLen) == suffix);
+			if (hasPrefix && hasSuffix)
+			{
+				fs::remove(entry);
+			}
 		}
 	}
 	
@@ -660,33 +679,33 @@ int main()
 		
 		switch (choice)
 		{
-			case 1:
+		case 1:
+		{
+			cout << "是否转义句子中存在的危险字符?(1=启用,0=不启用)";i_input
+			int escapeChoice;
+			cin >> escapeChoice;
+			cin.ignore();
+			bool escapeEnabled = (escapeChoice == 1);
+			
+			ClearCFGs(cfgDir, progName);
+			for (const auto& g : groups) GenerateGroupCFGsSeparate(g, cfgDir, progName, escapeEnabled);
+			GenerateManagerAndAutoexec(groups, cfgDir, progName);
+			_color(160);
+			cout << "\n分开模式CFG已生成,随机组已打乱顺序\n";
+			_color(11);
+			cout << "在游戏控制台输入'exec autoexec.cfg'以刷新,注意在CS2>设置>游戏设置>游戏中启用控制台。\n";
+			if (showtips)
 			{
-				cout << "是否转义句子中存在的危险字符?(1=启用,0=不启用)";i_input
-				int escapeChoice;
-				cin >> escapeChoice;
-				cin.ignore();
-				bool escapeEnabled = (escapeChoice == 1);
-				
-				ClearCFGs(cfgDir, progName);
-				for (const auto& g : groups) GenerateGroupCFGsSeparate(g, cfgDir, progName, escapeEnabled);
-				GenerateManagerAndAutoexec(groups, cfgDir, progName);
-				_color(160);
-				cout << "\n分开模式CFG已生成,随机组已打乱顺序\n";
+				_color(10);
+				cout << "如果想每次启动CS2时自动加载功能,需要在Steam>库>CS2右键>属性>启动选项中输入:\n";
 				_color(11);
-				cout << "在游戏控制台输入'exec autoexec.cfg'以刷新,注意在CS2>设置>游戏设置>游戏中启用控制台。\n";
-				if (showtips)
-				{
-					_color(10);
-					cout << "如果想每次启动CS2时自动加载功能,需要在Steam>库>CS2右键>属性>启动选项中输入:\n";
-					_color(11);
-					cout << "+exec autoexec.cfg\n";
-					showtips=false;
-				}
-				_color();
-				break;
+				cout << "+exec autoexec.cfg\n";
+				showtips=false;
 			}
-			case 2:
+			_color();
+			break;
+		}
+		case 2:
 			{
 				cout << "是否转义句子中存在的危险字符?(1=启用,0=不启用)";i_input
 				int escapeChoice;
@@ -712,7 +731,7 @@ int main()
 				_color();
 				break;
 			}
-			case 3:
+		case 3:
 			{
 				ClearCFGs(cfgDir, progName);
 				_color(160);
@@ -720,7 +739,7 @@ int main()
 				_color();
 				break;
 			}
-			case 4:
+		case 4:
 			{
 				cs2Path = SetCS2PathManual();
 				if (!cs2Path.empty())
@@ -734,17 +753,17 @@ int main()
 				}
 				break;
 			}
-			case 5:
+		case 5:
 			{
 				cout << "\n重新为各组绑定键位...\n";
 				BindGroupKeys(groups);
 				break;
 			}
-			case 6:
+		case 6:
 			{
 				return 0;
 			}
-			default:
+		default:
 			{
 				_color(12);
 				cout << "\n无效选择\n";
@@ -753,4 +772,3 @@ int main()
 		}
 	}
 }
-
