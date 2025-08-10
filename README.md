@@ -4,6 +4,8 @@
 >
 > 程序使用豆包编写，感谢豆包，感谢豆包，感谢豆包
 
+我们的主页：https://github.com/iqonli/iqonli
+
 本项目使用[GNU General Public License v3.0](LICENSE) 许可证。
 
 感谢[cneicy/ImLag](https://github.com/cneicy/ImLag)项目提供的思路以及部分句子，[视频](https://www.bilibili.com/video/BV1gNTgzLEKV)
